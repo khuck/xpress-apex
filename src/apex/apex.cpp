@@ -1032,7 +1032,8 @@ void yield(std::shared_ptr<task_wrapper> tt_ptr)
     tt_ptr->prof = nullptr;
 }
 
-void sample_value(const std::string &name, double value)
+void sample_value(const std::string &name, double value, uint64_t timestamp,
+    uint32_t device, uint32_t context, uint32_t stream)
 {
     // if APEX is disabled, do nothing.
     if (apex_options::disable() == true) { return; }
@@ -1065,7 +1066,8 @@ void sample_value(const std::string &name, double value)
             }
         }
     }
-    sample_value_event_data data(tid, name, value);
+    sample_value_event_data data(tid, name, value, timestamp, device,
+        context, stream);
     if (_notify_listeners) {
         //read_lock_type l(instance->listener_mutex);
         for (unsigned int i = 0 ; i < instance->listeners.size() ; i++) {

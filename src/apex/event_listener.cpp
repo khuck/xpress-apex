@@ -43,12 +43,17 @@ node_event_data::node_event_data(int node_id, int thread_id) {
 }
 
 sample_value_event_data::sample_value_event_data(int thread_id,
-    string counter_name, double counter_value) {
+    string counter_name, double counter_value, uint64_t timestamp,
+    uint32_t device, uint32_t context, uint32_t stream) {
   this->event_type_ = APEX_SAMPLE_VALUE;
   this->is_counter = true;
   this->thread_id = thread_id;
   this->counter_name = new string(counter_name);
   this->counter_value = counter_value;
+  this->timestamp = timestamp;
+  this->device = device;
+  this->context = context;
+  this->stream = stream;
 }
 
 sample_value_event_data::~sample_value_event_data() {

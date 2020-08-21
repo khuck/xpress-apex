@@ -25,7 +25,8 @@ extern "C" {
         apex_exit_thread();
     }
     void ps_tool_dump_data(void) {
-        apex_dump(false);
+        /* ignore dumps until we figure out how do to it safely */
+        // apex_dump(false);
     }
 
     // measurement function declarations
