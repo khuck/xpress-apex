@@ -29,7 +29,7 @@
 #define OTF2_EC(call) { \
     OTF2_ErrorCode ec = call; \
     if (ec != OTF2_SUCCESS) { \
-        printf("OTF2 Error: %s, %s\n", OTF2_Error_GetName(ec),\
+        printf("OTF2 Error: %s: %s, %s\n", #call, OTF2_Error_GetName(ec),\
         OTF2_Error_GetDescription (ec)); \
     } \
 }
@@ -489,7 +489,6 @@ namespace apex {
         /* only open once! */
         static bool created = false;
         if (created) return true;
-
         if (apex_options::otf2_testing() && my_saved_node_id == 0) {
             // is this a good idea?
             /* NO! why? because we don't know which rank we are, and
@@ -1291,8 +1290,34 @@ namespace apex {
         // tell the union what type this is
         OTF2_Type omt[1];
         omt[0]=OTF2_TYPE_DOUBLE;
-        {
-            uint64_t idx = get_metric_index(*(data.counter_name));
+        uint64_t idx = get_metric_index(*(data.counter_name));
+        // handle an asynchronous counter
+        if (data.timestamp > 0) {
+            uint32_t tid{make_vtid(data.device, data.context, data.stream)};
+            if (last_ts.count(tid) == 0) {
+                last_ts[tid] = 0ULL;
+            }
+            uint64_t last = last_ts[tid];
+            uint64_t stamp = (data.timestamp - globalOffset);
+            if(stamp < last) {
+                dropped++;
+                /*
+                std::cerr << "APEX: Warning - Events delivered out of order on Device "
+                        << device << ", Context " << context << ", Stream " << stream
+                        << ".\nIgnoring event " << p->tt_ptr->task_id->get_name()
+                        << " with timestamp of " << stamp << " after last event "
+                        << "with timestamp of " << last << std::endl;
+                */
+                return;
+            }
+            // before we process the event, make sure the event write is open
+            OTF2_EvtWriter* local_evt_writer = vthread_evt_writer_map[tid];
+            // write our counter into the event stream
+            if (local_evt_writer != nullptr) {
+                OTF2_EC(OTF2_EvtWriter_Metric(local_evt_writer, nullptr, stamp,
+                idx, 1, omt, omv ));
+            }
+        } else {
             // because we are writing to thread 0's event stream,
             // set the lock
             std::unique_lock<std::mutex> lock(_comm_mutex);
@@ -1965,6 +1990,7 @@ namespace apex {
         //metric_file << thread_instance::get_num_threads() << endl;
         metric_file << _event_threads.size() << endl;
         metric_file << saved_end_timestamp << endl;
+        std::cout << my_saved_node_id << " " << saved_end_timestamp << std::endl;
         // then iterate over the metrics and write them out.
         for (auto const &i : global_metric_indices) {
             string id = i.first;

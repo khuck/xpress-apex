@@ -444,7 +444,7 @@ uint64_t test_for_MPI_comm_rank(uint64_t commrank) {
     tmpvar = getenv("OMPI_COMM_WORLD_RANK");
     if (tmpvar != NULL) {
         commrank = atol(tmpvar);
-        // printf("Changing openMPI rank to %lu\n", commrank);
+        printf("Changing openMPI rank to %lu\n", commrank);
         return commrank;
     }
     // PBS/Torque
@@ -479,7 +479,7 @@ uint64_t test_for_MPI_comm_size(uint64_t commsize) {
     tmpvar = getenv("OMPI_COMM_WORLD_SIZE");
     if (tmpvar != NULL) {
         commsize = atol(tmpvar);
-        // printf("Changing openMPI size to %lu\n", commsize);
+        printf("Changing openMPI size to %lu\n", commsize);
         return commsize;
     }
     // PBS/Torque - no variable specifies number of nodes...

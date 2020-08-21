@@ -61,7 +61,13 @@ public:
   std::string * counter_name;
   double counter_value;
   bool is_counter;
-  sample_value_event_data(int thread_id, std::string counter_name, double counter_value);
+  uint64_t timestamp;
+  uint32_t device;
+  uint32_t context;
+  uint32_t stream;
+  sample_value_event_data(int thread_id, std::string counter_name,
+    double counter_value, uint64_t timestamp, uint32_t device,
+    uint32_t context, uint32_t stream);
   ~sample_value_event_data();
 };
 

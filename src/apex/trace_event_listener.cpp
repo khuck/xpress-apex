@@ -21,8 +21,8 @@ trace_event_listener::trace_event_listener (void) : _terminate(false),
     num_events(0), _end_time(0.0) {
     std::stringstream ss;
     ss << fixed << "{\n";
-    ss << "\"displayTimeUnit\": \"ms\",\n";
-    ss << "\"traceEvents\": [\n";
+    ss << "\"displayTimeUnit\":\"ms\",\n";
+    ss << "\"traceEvents\":[\n";
     ss << "{\"name\":\"APEX MAIN\""
        << ",\"ph\":\"B\",\"pid\":"
        << saved_node_id << ",\"tid\":0,\"ts\":"
@@ -132,7 +132,7 @@ inline void trace_event_listener::_common_stop(std::shared_ptr<profiler> &p) {
         ss << "{\"name\":\"" << p->get_task_id()->get_name()
               << "\",\"ph\":\"X\",\"pid\":"
               << saved_node_id << ",\"tid\":" << tid
-              << ",\"ts\":" << fixed << p->get_start_us() << ", \"dur\": "
+              << ",\"ts\":" << fixed << p->get_start_us() << ", \"dur\":"
               << p->get_stop_us() - p->get_start_us()
               << ",\"args\":{\"GUID\":" << p->guid << ",\"Parent GUID\":" << pguid << "}},\n";
         write_to_trace(ss);
@@ -151,12 +151,20 @@ void trace_event_listener::on_yield(std::shared_ptr<profiler> &p) {
 
 void trace_event_listener::on_sample_value(sample_value_event_data &data) {
     if (!_terminate) {
+        uint64_t stamp;
         std::stringstream ss;
-        ss << "{\"name\": \"" << *(data.counter_name)
-              << "\",\"ph\":\"C\",\"pid\": " << saved_node_id
-              << ",\"ts\":" << fixed << profiler::get_time_us()
-              << ",\"args\":{\"value\":" << fixed << data.counter_value
-              << "}},\n";
+        ss << "{\"name\":\"" << *(data.counter_name)
+           << "\",\"ph\":\"C\",\"pid\":" << saved_node_id;
+        if (data.timestamp > 0) {
+            stamp = data.timestamp * 1.0e-3; // convert to microseconds
+            std::string tid{make_tid(data.device, data.context, data.stream)};
+            ss << ",\"tid\":" << tid;
+        } else {
+            stamp = profiler::get_time_us();
+        }
+        ss << ",\"ts\":" << fixed << stamp
+           << ",\"args\":{\"value\":" << fixed << data.counter_value
+           << "}},\n";
         write_to_trace(ss);
         flush_trace_if_necessary();
     }

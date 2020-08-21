@@ -124,8 +124,8 @@ void store_profiler_data(const std::string &name, uint32_t correlationId,
 }
 
 void store_counter_data(const char * name, const std::string& context,
-    uint64_t end, double value, bool force = false) {
-    APEX_UNUSED(end);
+    uint64_t end, double value, bool force = false,
+    uint32_t deviceId = 0, uint32_t contextId = 0, uint32_t streamId = 0) {
     if (name == nullptr) {
         apex::sample_value(context, value);
     } else {
@@ -134,23 +134,30 @@ void store_counter_data(const char * name, const std::string& context,
         if (apex::apex_options::use_cuda_kernel_details() || force) {
             ss << " <- " << context;
         }
-        apex::sample_value(ss.str(), value);
+        apex::sample_value(ss.str(), value, end + deltaTimestamp,
+            deviceId, contextId, streamId);
     }
 }
 
 void store_counter_data(const char * name, const std::string& context,
-    uint64_t end, int32_t value, bool force = false) {
-    store_counter_data(name, context, end, (double)(value), force);
+    uint64_t end, int32_t value, bool force = false,
+    uint32_t deviceId = 0, uint32_t contextId = 0, uint32_t streamId = 0) {
+    store_counter_data(name, context, end, (double)(value), force,
+        deviceId, contextId, streamId);
 }
 
 void store_counter_data(const char * name, const std::string& context,
-    uint64_t end, uint32_t value, bool force = false) {
-    store_counter_data(name, context, end, (double)(value), force);
+    uint64_t end, uint32_t value, bool force = false,
+    uint32_t deviceId = 0, uint32_t contextId = 0, uint32_t streamId = 0) {
+    store_counter_data(name, context, end, (double)(value), force,
+        deviceId, contextId, streamId);
 }
 
 void store_counter_data(const char * name, const std::string& context,
-    uint64_t end, uint64_t value, bool force = false) {
-    store_counter_data(name, context, end, (double)(value), force);
+    uint64_t end, uint64_t value, bool force = false,
+    uint32_t deviceId = 0, uint32_t contextId = 0, uint32_t streamId = 0) {
+    store_counter_data(name, context, end, (double)(value), force,
+        deviceId, contextId, streamId);
 }
 
 static const char * getMemcpyKindString(uint8_t kind)
@@ -301,12 +308,14 @@ static void memoryActivity(CUpti_Activity *record) {
             memcpy->end, memcpy->deviceId, memcpy->contextId, memcpy->streamId);
     if (apex::apex_options::use_cuda_counters()) {
         store_counter_data("GPU: Bytes", name, memcpy->end,
-            memcpy->bytes, true);
+            memcpy->bytes, true, memcpy->deviceId,
+            memcpy->contextId, memcpy->streamId);
         uint64_t duration = memcpy->end - memcpy->start;
         // dividing bytes by nanoseconds should give us GB/s
         double bandwidth = (double)(memcpy->bytes) / (double)(duration);
-        store_counter_data("GPU: Bandwith (GB/s)", name,
-            memcpy->end, bandwidth, true);
+        store_counter_data("GPU: Bandwidth (GB/s)", name,
+            memcpy->end, bandwidth, true, memcpy->deviceId,
+            memcpy->contextId, memcpy->streamId);
     }
 }
 
@@ -327,21 +336,21 @@ static void unifiedMemoryActivity(CUpti_Activity *record) {
                 device, 0, 0);
         if (apex::apex_options::use_cuda_counters()) {
             store_counter_data("GPU: Bytes", name, memcpy->end,
-                    memcpy->value, true);
+                    memcpy->value, true, device, 0, 0);
             uint64_t duration = memcpy->end - memcpy->start;
             // dividing bytes by nanoseconds should give us GB/s
             double bandwidth = (double)(memcpy->value) / (double)(duration);
-            store_counter_data("GPU: Bandwith (GB/s)", name,
-                    memcpy->end, bandwidth, true);
+            store_counter_data("GPU: Bandwidth (GB/s)", name,
+                    memcpy->end, bandwidth, true, device, 0, 0);
         }
     } else if (memcpy->counterKind ==
             CUPTI_ACTIVITY_UNIFIED_MEMORY_COUNTER_KIND_CPU_PAGE_FAULT_COUNT) {
         store_counter_data(nullptr, name, memcpy->start,
-                1);
+                1, false, device, 0, 0);
     } else if (memcpy->counterKind ==
             CUPTI_ACTIVITY_UNIFIED_MEMORY_COUNTER_KIND_GPU_PAGE_FAULT) {
         store_counter_data(nullptr, name, memcpy->start,
-                memcpy->value);
+                memcpy->value, false, device, 0, 0);
     }
 }
 
@@ -365,17 +374,29 @@ static void kernelActivity(CUpti_Activity *record) {
     if (apex::apex_options::use_cuda_counters()) {
         std::string * demangled = apex::demangle(kernel->name);
         store_counter_data("GPU: Dynamic Shared Memory (B)",
-                *demangled, kernel->end, kernel->dynamicSharedMemory);
+                *demangled, kernel->end, kernel->dynamicSharedMemory,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         store_counter_data("GPU: Local Memory Per Thread (B)",
-                *demangled, kernel->end, kernel->localMemoryPerThread);
+                *demangled, kernel->end, kernel->localMemoryPerThread,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         store_counter_data("GPU: Local Memory Total (B)",
-                *demangled, kernel->end, kernel->localMemoryTotal);
+                *demangled, kernel->end, kernel->localMemoryTotal,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         store_counter_data("GPU: Registers Per Thread",
-                *demangled, kernel->end, kernel->registersPerThread);
+                *demangled, kernel->end, kernel->registersPerThread,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         store_counter_data("GPU: Shared Memory Size (B)",
-                *demangled, kernel->end, kernel->sharedMemoryExecuted);
+                *demangled, kernel->end, kernel->sharedMemoryExecuted,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         store_counter_data("GPU: Static Shared Memory (B)",
-                *demangled, kernel->end, kernel->staticSharedMemory);
+                *demangled, kernel->end, kernel->staticSharedMemory,
+                false, kernel->deviceId, kernel->contextId,
+                kernel->streamId);
         delete(demangled);
     }
 }
@@ -441,7 +462,8 @@ static void openaccDataActivity(CUpti_Activity *record) {
     store_profiler_data(label, data->externalId, data->start,
         data->end, data->cuDeviceId, data->cuContextId, data->cuStreamId);
     static std::string bytes{"Bytes Transferred"};
-    store_counter_data(label.c_str(), bytes, data->end, data->bytes);
+    store_counter_data(label.c_str(), bytes, data->end, data->bytes,
+        false, data->cuDeviceId, data->cuContextId, data->cuStreamId);
 }
 
 static void openaccKernelActivity(CUpti_Activity *record) {
@@ -451,11 +473,14 @@ static void openaccKernelActivity(CUpti_Activity *record) {
             data->end, data->cuDeviceId, data->cuContextId,
             data->cuStreamId);
     static std::string gangs{"Num Gangs"};
-    store_counter_data(label.c_str(), gangs, data->end, data->numGangs);
+    store_counter_data(label.c_str(), gangs, data->end, data->numGangs,
+        false, data->cuDeviceId, data->cuContextId, data->cuStreamId);
     static std::string workers{"Num Workers"};
-    store_counter_data(label.c_str(), workers, data->end, data->numWorkers);
+    store_counter_data(label.c_str(), workers, data->end, data->numWorkers,
+        false, data->cuDeviceId, data->cuContextId, data->cuStreamId);
     static std::string lanes{"Num Vector Lanes"};
-    store_counter_data(label.c_str(), lanes, data->end, data->vectorLength);
+    store_counter_data(label.c_str(), lanes, data->end, data->vectorLength,
+        false, data->cuDeviceId, data->cuContextId, data->cuStreamId);
 }
 
 static void openaccOtherActivity(CUpti_Activity *record) {

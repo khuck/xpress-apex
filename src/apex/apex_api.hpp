@@ -330,9 +330,12 @@ APEX_EXPORT void set_state(apex_thread_state state);
 
  \param name The name of the sampled value
  \param value The sampled value
+ \param timestamp The timestamp for the counter (asynchronous event)
  \return No return value.
  */
-APEX_EXPORT void sample_value(const std::string &name, double value);
+APEX_EXPORT void sample_value(const std::string &name, double value,
+    uint64_t timestamp = 0, uint32_t device = 0, uint32_t context = 0,
+    uint32_t thread = 0);
 
 /**
  \brief Create a new task (dependency).
