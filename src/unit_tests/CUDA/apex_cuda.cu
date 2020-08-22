@@ -52,21 +52,23 @@ int main(int argc, char * argv[])
 #endif
   apex::apex_options::use_screen_output(true);
   DataElement *e;
-  RUNTIME_API_CALL(cudaMallocManaged((void**)&e, sizeof(DataElement)));
+  for (int iterations = 0 ; iterations < 3 ; iterations++) {
+    RUNTIME_API_CALL(cudaMallocManaged((void**)&e, sizeof(DataElement)));
 
-  e->value = 10;
-  RUNTIME_API_CALL(cudaMallocManaged((void**)&(e->name), sizeof(char) * (strlen("hello") + 1) ));
-  strcpy(e->name, "hello");
+    e->value = 10;
+    RUNTIME_API_CALL(cudaMallocManaged((void**)&(e->name), sizeof(char) * (strlen("hello") + 1) ));
+    strcpy(e->name, "hello");
 
-  int i;
-  for(i = 0 ; i < ITERATIONS ; i++) {
-    launch(e);
+    int i;
+    for(i = 0 ; i < ITERATIONS ; i++) {
+        launch(e);
+    }
+
+    printf("On host: name=%s, value=%d\n", e->name, e->value);
+
+    RUNTIME_API_CALL(cudaFree(e->name));
+    RUNTIME_API_CALL(cudaFree(e));
   }
-
-  printf("On host: name=%s, value=%d\n", e->name, e->value);
-
-  RUNTIME_API_CALL(cudaFree(e->name));
-  RUNTIME_API_CALL(cudaFree(e));
 #if defined(APEX_HAVE_MPI)
   MPI_Finalize();
 #endif

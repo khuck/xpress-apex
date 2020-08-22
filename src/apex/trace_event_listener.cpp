@@ -157,8 +157,8 @@ void trace_event_listener::on_sample_value(sample_value_event_data &data) {
            << "\",\"ph\":\"C\",\"pid\":" << saved_node_id;
         if (data.timestamp > 0) {
             stamp = data.timestamp * 1.0e-3; // convert to microseconds
-            std::string tid{make_tid(data.device, data.context, data.stream)};
-            ss << ",\"tid\":" << tid;
+            //std::string tid{make_tid(data.device, data.context, data.stream)};
+            //ss << ",\"tid\":" << tid;
         } else {
             stamp = profiler::get_time_us();
         }

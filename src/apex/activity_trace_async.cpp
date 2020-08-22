@@ -123,6 +123,20 @@ void store_profiler_data(const std::string &name, uint32_t correlationId,
     instance->complete_task(tt);
 }
 
+void store_counter_data_host(const char * name, const std::string& context,
+    double value) {
+    if (name == nullptr) {
+        apex::sample_value(context, value);
+    } else {
+        std::stringstream ss;
+        ss << name;
+        if (apex::apex_options::use_cuda_kernel_details()) {
+            ss << " <- " << context;
+        }
+        apex::sample_value(ss.str(), value);
+    }
+}
+
 void store_counter_data(const char * name, const std::string& context,
     uint64_t end, double value, bool force = false,
     uint32_t deviceId = 0, uint32_t contextId = 0, uint32_t streamId = 0) {
@@ -401,61 +415,6 @@ static void kernelActivity(CUpti_Activity *record) {
     }
 }
 
-static void environmentActivity(CUpti_Activity *record) {
-    CUpti_ActivityEnvironment *env =
-        (CUpti_ActivityEnvironment*)record;
-    std::stringstream ss;
-    ss << "GPU: Device " << env->deviceId << " ";
-    std::string prefix{ss.str()};
-    switch (env->environmentKind) {
-        case CUPTI_ACTIVITY_ENVIRONMENT_COOLING: {
-            std::stringstream label;
-            label << prefix << " Fan Speed (%max)";
-            double value = (double)(env->data.cooling.fanSpeed);
-            store_counter_data(nullptr, label.str(), apex::profiler::get_time_ns(), value);
-            break;
-        }
-        case CUPTI_ACTIVITY_ENVIRONMENT_TEMPERATURE: {
-            std::stringstream label;
-            label << prefix << " Temperature (C)";
-            double value = (double)(env->data.temperature.gpuTemperature);
-            store_counter_data(nullptr, label.str(), apex::profiler::get_time_ns(), value);
-            break;
-        }
-        case CUPTI_ACTIVITY_ENVIRONMENT_POWER: {
-            std::stringstream label;
-            label << prefix << " Power (mW)";
-            double power = (double)(env->data.power.power);
-            double limit = (double)(env->data.power.powerLimit);
-            double utilization = (power/limit) * 100.0;
-            uint64_t timestamp = apex::profiler::get_time_ns();
-            store_counter_data(nullptr, label.str(), timestamp, power);
-            label.str("");
-            label << prefix << " Power Limit (mW)";
-            store_counter_data(nullptr, label.str(), timestamp, limit);
-            label.str("");
-            label << prefix << " Power Utilization (%)";
-            store_counter_data(nullptr, label.str(), timestamp, utilization);
-            break;
-        }
-        case CUPTI_ACTIVITY_ENVIRONMENT_SPEED: {
-            // sample the clock and memory speeds
-            std::stringstream label;
-            uint64_t timestamp = apex::profiler::get_time_ns();
-            label << prefix << " SM Frequency (MHz)";
-            double value = (double)(env->data.speed.smClock);
-            store_counter_data(nullptr, label.str(), timestamp, value);
-            label.str("");
-            label << prefix << " Memory Frequency (MHz)";
-            value = (double)(env->data.speed.memoryClock);
-            store_counter_data(nullptr, label.str(), timestamp, value);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
 static void openaccDataActivity(CUpti_Activity *record) {
     CUpti_ActivityOpenAccData *data = (CUpti_ActivityOpenAccData *) record;
     std::string label{openacc_event_names[data->eventKind]};
@@ -558,10 +517,6 @@ static void printActivity(CUpti_Activity *record) {
         }
         case CUPTI_ACTIVITY_KIND_OPENMP: {
             openmpActivity(record);
-            break;
-        }
-        case CUPTI_ACTIVITY_KIND_ENVIRONMENT: {
-            environmentActivity(record);
             break;
         }
         default:
@@ -670,11 +625,6 @@ void configureUnifiedMemorySupport(void) {
 bool initialize_first_time() {
     apex::init("APEX CUDA support", 0, 1);
     configureUnifiedMemorySupport();
-    /* Create a CUDA device context, so we can collect environment.  This is done by
-     * making a cuda call. HOWEVER, we need to disable the callback handler or we will
-     * end up in a recursive loop.
-     */
-    // CUPTI_CALL(cuptiActivityEnable(CUPTI_ACTIVITY_KIND_ENVIRONMENT)); // 20
     return true;
 }
 
@@ -723,7 +673,7 @@ bool getBytesIfMalloc(CUpti_CallbackId id, const void* params, std::string conte
         }
     }
     double value = (double)(bytes);
-    store_counter_data("GPU: Bytes Allocated", context, apex::profiler::get_time_ns(), value);
+    store_counter_data_host("Bytes Allocated for GPU", context, value);
     return true;
 }
 
@@ -830,9 +780,6 @@ void apex_cupti_callback_dispatch(void *ud, CUpti_CallbackDomain domain,
             }
         }
         std::string tmp(ss.str());
-        /*
-           std::string tmp(cbdata->functionName);
-           */
         auto timer = apex::new_task(tmp);
         apex::start(timer);
         timer_stack.push(timer);
@@ -841,14 +788,6 @@ void apex_cupti_callback_dispatch(void *ud, CUpti_CallbackDomain domain,
         map_mutex.unlock();
         getBytesIfMalloc(id, cbdata->functionParams, tmp);
     } else if (!timer_stack.empty()) {
-        /*
-        static bool first{true};
-        // now that a kernel has been launched, we an set up environment tracking
-        if (first && cbdata->symbolName != NULL && strlen(cbdata->symbolName) > 0) {
-            CUPTI_CALL(cuptiActivityEnable(CUPTI_ACTIVITY_KIND_ENVIRONMENT)); // 20
-            first = false;
-        }
-        */
         auto timer = timer_stack.top();
         apex::stop(timer);
         timer_stack.pop();

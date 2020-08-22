@@ -1301,6 +1301,7 @@ namespace apex {
             uint64_t stamp = (data.timestamp - globalOffset);
             if(stamp < last) {
                 dropped++;
+                dropped_counter_async++;
                 /*
                 std::cerr << "APEX: Warning - Events delivered out of order on Device "
                         << device << ", Context " << context << ", Stream " << stream
@@ -1311,24 +1312,42 @@ namespace apex {
                 return;
             }
             // before we process the event, make sure the event write is open
-            OTF2_EvtWriter* local_evt_writer = vthread_evt_writer_map[tid];
+            OTF2_EvtWriter* async_c_evt_writer = vthread_evt_writer_map[tid];
             // write our counter into the event stream
-            if (local_evt_writer != nullptr) {
-                OTF2_EC(OTF2_EvtWriter_Metric(local_evt_writer, nullptr, stamp,
+            if (async_c_evt_writer != nullptr) {
+                OTF2_EC(OTF2_EvtWriter_Metric(async_c_evt_writer, nullptr, stamp,
                 idx, 1, omt, omv ));
             }
+            last_ts[tid] = stamp;
         } else {
             // because we are writing to thread 0's event stream,
             // set the lock
             std::unique_lock<std::mutex> lock(_comm_mutex);
             // we have to get a timestamp after the lock, to make sure
             // that time stamps are monotonically increasing. :(
+            if (last_ts.count(0) == 0) {
+                last_ts[0] = 0ULL;
+            }
+            uint64_t last = last_ts[0];
             uint64_t stamp = get_time();
+            if(stamp < last) {
+                dropped++;
+                dropped_counter++;
+                /*
+                std::cerr << "APEX: Warning - Events delivered out of order on Device "
+                        << device << ", Context " << context << ", Stream " << stream
+                        << ".\nIgnoring event " << p->tt_ptr->task_id->get_name()
+                        << " with timestamp of " << stamp << " after last event "
+                        << "with timestamp of " << last << std::endl;
+                */
+                return;
+            }
             // write our counter into the event stream
             if (comm_evt_writer != nullptr) {
                 OTF2_EC(OTF2_EvtWriter_Metric( comm_evt_writer, nullptr, stamp,
                 idx, 1, omt, omv ));
             }
+            last_ts[0] = stamp;
         }
         return;
     }
@@ -1990,7 +2009,7 @@ namespace apex {
         //metric_file << thread_instance::get_num_threads() << endl;
         metric_file << _event_threads.size() << endl;
         metric_file << saved_end_timestamp << endl;
-        std::cout << my_saved_node_id << " " << saved_end_timestamp << std::endl;
+        //std::cout << my_saved_node_id << " " << saved_end_timestamp << std::endl;
         // then iterate over the metrics and write them out.
         for (auto const &i : global_metric_indices) {
             string id = i.first;
@@ -2219,6 +2238,7 @@ namespace apex {
         stamp = p->get_start_ns() - globalOffset;
         if(stamp < last) {
             dropped++;
+            dropped_timer_async++;
             /*
             std::cerr << "APEX: Warning - Events delivered out of order on Device "
                       << device << ", Context " << context << ", Stream " << stream
@@ -2231,17 +2251,18 @@ namespace apex {
         // don't close the archive on us!
         read_lock_type lock(_archive_mutex);
         // before we process the event, make sure the event write is open
-        OTF2_EvtWriter* local_evt_writer = vthread_evt_writer_map[tid];
-        if (local_evt_writer != nullptr) {
+        OTF2_EvtWriter* async_ts_evt_writer = vthread_evt_writer_map[tid];
+        OTF2_EvtWriter* async_te_evt_writer = async_ts_evt_writer;
+        if (async_ts_evt_writer != nullptr) {
             // create an attribute list
             OTF2_AttributeList * al = OTF2_AttributeList_New();
             // create an attribute
             OTF2_AttributeList_AddUint64( al, 0, p->tt_ptr->guid );
             OTF2_AttributeList_AddUint64( al, 1, p->tt_ptr->parent_guid );
-            OTF2_EC(OTF2_EvtWriter_Enter( local_evt_writer, al,
+            OTF2_EC(OTF2_EvtWriter_Enter( async_ts_evt_writer, al,
                 stamp, idx /* region */ ));
             stamp = p->get_stop_ns() - globalOffset;
-            OTF2_EC(OTF2_EvtWriter_Leave( local_evt_writer, al,
+            OTF2_EC(OTF2_EvtWriter_Leave( async_te_evt_writer, al,
                 stamp, idx /* region */ ));
             last_ts[tid] = stamp;
             //last_p[tid] = std::string(p->tt_ptr->task_id->get_name());
