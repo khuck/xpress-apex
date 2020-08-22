@@ -1100,7 +1100,6 @@ namespace apex {
         pthread_wrapper* ptw = (pthread_wrapper*)_ptw;
         // make sure APEX knows this is not a worker thread
         thread_instance::instance(false);
-        ptw->_running = true;
         if (apex_options::pin_apex_threads()) {
             set_thread_affinity();
         }
@@ -1116,6 +1115,8 @@ namespace apex {
             tau_listener::Tau_start_wrapper("proc_data_reader::read_proc");
         }
         if (done) { return nullptr; }
+        // do this AFTER any early exits!
+        ptw->_running = true;
 #if defined(APEX_HAVE_PAPI)
         initialize_papi_events();
 #endif
@@ -1172,6 +1173,7 @@ namespace apex {
                 tau_listener::Tau_stop_wrapper("proc_data_reader::read_proc: main loop");
             }
         }
+        ptw->_running = false;
 #ifdef APEX_HAVE_LM_SENSORS
         delete(mysensors);
 #endif
@@ -1181,7 +1183,6 @@ namespace apex {
         }
         delete(oldData);
         thread_instance::delete_instance();
-        ptw->_running = false;
         return nullptr;
     }
 

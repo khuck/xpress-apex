@@ -195,6 +195,10 @@ namespace apex {
         uint32_t make_vtid (uint32_t device, uint32_t context, uint32_t stream);
         std::map<uint32_t,uint64_t> last_ts;
         uint64_t dropped;
+        uint64_t dropped_timer;
+        uint64_t dropped_timer_async;
+        uint64_t dropped_counter;
+        uint64_t dropped_counter_async;
     public:
         otf2_listener (void);
         //~otf2_listener (void) { shutdown_event_data data(my_saved_node_id,0);
@@ -204,7 +208,11 @@ namespace apex {
                 std::cerr << "APEX: Warning! "
                       << dropped << " Aysnchronous Events were delivered out of "
                       << "order by CUDA/CUPTI.\n"
-                      << "These events were ignored. Trace may be impcomplete."
+                      << "These events were ignored. Trace may be impcomplete.\n"
+                      << "Timers: " << dropped_timer << "\n"
+                      << "Async Timers: " << dropped_timer_async << "\n"
+                      << "Counters: " << dropped_counter << "\n"
+                      << "Async Counters: " << dropped_counter_async << "\n"
                       << std::endl;
             }
             finalize(); };
